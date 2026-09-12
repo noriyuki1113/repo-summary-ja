@@ -1,0 +1,28 @@
+{
+  "name": "repo-summary-ja",
+  "version": "0.1.0",
+  "description": "GitHubリポジトリの内容をClaude APIで解析し、日本語の要約を生成するCLIツール",
+  "type": "module",
+  "bin": {
+    "repo-summary-ja": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.68.0",
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
