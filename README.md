@@ -28,11 +28,13 @@ app/
     └── cron/refresh-stars/route.ts   Vercel Cronによる鮮度維持バッチ
 
 lib/
-├── github.ts       GitHub API連携
-├── claude.ts        Claude APIによる日本語要約
-├── db.ts             Postgres接続・クエリ
-├── lookup.ts         収集ロジック（DB→なければGitHub/Claude→保存）
-└── rate-limit.ts     IPベースのレート制限
+├── github.ts             GitHub API連携
+├── github-discovery.ts   GitHub Search APIによる人気/活発リポジトリの自動発見
+├── claude.ts              Claude APIによる日本語要約
+├── db.ts                   Postgres接続・クエリ
+├── lookup.ts               収集ロジック（DB→なければGitHub/Claude→保存）
+├── ossalt.ts               ossalt-nextのimport_candidatesへの登録
+└── rate-limit.ts           IPベースのレート制限
 
 scripts/migrate.sql  DBスキーマ定義
 ```
@@ -47,6 +49,15 @@ scripts/migrate.sql  DBスキーマ定義
 
 日次バッチ（`/api/cron/refresh-stars`）はスター数・フォーク数などの鮮度のみを更新し、Claude要約の再生成は行いません。
 
+## 自動発見 → ossalt-next連携
+
+`/api/cron/discover` が日次でGitHub Search APIから人気・活発なリポジトリを発見し、通常の収集フロー（GitHub取得→Claude要約→DB保存）を実行したうえで、[ossalt-next](https://github.com/noriyuki1113/ossalt-next) の `import_candidates` テーブル（非公開のレビュー待ちステージングテーブル）に登録します。
+
+- スター帯×直近アクティブ期間の組み合わせを日替わりでローテーションし、幅広いカテゴリのOSSを継続的に発見する（`lib/github-discovery.ts`）
+- ossalt-nextの `projects` / `alternative_relations`（公開テーブル）には**一切書き込まない**。あくまで人間のレビュー待ちキューへの追加まで
+- 既存レコード（レビュー済み・却下済みを含む）は上書きしない（`ignoreDuplicates: true`）。ossalt-next側の判断を自動化が覆すことはない
+- ossalt-nextのSupabase service role keyが必要（下記環境変数を参照）
+
 ## 環境変数
 
 | 変数名 | 必須 | 説明 |
@@ -55,6 +66,9 @@ scripts/migrate.sql  DBスキーマ定義
 | `GITHUB_TOKEN` | 任意 | GitHub Fine-grained PAT（public_repo read）。レート制限緩和用 |
 | `ANTHROPIC_API_KEY` | 必須 | Claude APIキー |
 | `CRON_SECRET` | 必須 | `/api/cron/*` を保護するための任意の文字列 |
+| `OSSALT_SUPABASE_URL` | ossalt-next連携時のみ必須 | ossalt-nextのSupabaseプロジェクトURL |
+| `OSSALT_SUPABASE_SERVICE_ROLE_KEY` | ossalt-next連携時のみ必須 | ossalt-nextのSupabase Dashboard → Settings → API → `service_role`（RLSをバイパスして書き込むために必要。anon keyでは不可） |
+| `SITE_URL` | 任意 | 自サイトの本番URL。ossalt-nextへの登録時の`source_url`生成に使用。省略時は`https://repo-summary-ja.vercel.app` |
 
 ## デプロイ
 
@@ -66,7 +80,9 @@ Vercel + Vercel Postgres(Neon統合)でのデプロイを想定。
 3. Neon の SQL Editor(または `npm run migrate`)で `scripts/migrate.sql` を適用
 4. Redeployして動作確認
 
-`vercel.json` の設定により、日次バッチ(`/api/cron/refresh-stars`)はVercel Cronとして自動登録される。Vercel管理画面の「Run」ボタンによる手動実行は`CRON_SECRET`ヘッダーが付与されないため401になるのが正常(実際のスケジュール実行時のみ自動でヘッダーが付与される)。
+`vercel.json` の設定により、日次バッチ(`/api/cron/refresh-stars` と `/api/cron/discover`)はVercel Cronとして自動登録される。Vercel管理画面の「Run」ボタンによる手動実行は`CRON_SECRET`ヘッダーが付与されないため401になるのが正常(実際のスケジュール実行時のみ自動でヘッダーが付与される)。
+
+**Vercel Hobbyプランはcron jobを最大2つまでしか登録できない。** 既に2つ(`refresh-stars` / `discover`)で上限に達しているため、今後新たなcronを追加する場合はProプランへのアップグレードが必要。
 
 ## 運用
 

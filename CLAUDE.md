@@ -16,3 +16,5 @@ GitHubリポジトリを日本語で要約する公開Webサービス。Next.js 
 - **`getOrFetchRepo` は React `cache()` でメモ化**している。`generateMetadata` とページ本体の両方から呼ばれるため、外すとGitHub/Claude呼び出しが2重に走る。
 - **DBアクセスは `pg` を使用**（`@vercel/postgres` は非推奨のため不採用）。`POSTGRES_URL` があれば Vercel Postgres でも Neon 直結でも動作する。
 - **Cronバッチ**（`/api/cron/refresh-stars`）はスター数等の鮮度更新のみを行い、Claude要約は再生成しない（コスト抑制）。`CRON_SECRET` による認証必須。
+- **`/api/cron/discover`（自動発見 → ossalt-next連携）は絶対に `ossalt-next` の `projects` / `alternative_relations`（公開テーブル）へ書き込んではならない**。書き込み先は必ず `import_candidates`（非公開のレビュー待ちステージングテーブル）のみ。これはossalt-next自身の設計方針（根拠のない情報は公開しない・人間のレビューを経て初めて昇格する）を尊重するための制約であり、変更・緩和しないこと。`lib/ossalt.ts` の `submitImportCandidate` は `ignoreDuplicates: true` で既存レコード（レビュー済み・却下済み含む）を絶対に上書きしない設計にしている — これも変更しないこと。
+- Vercel Hobbyプランはcron jobを最大2つまでしか登録できない。既に `refresh-stars` / `discover` の2つで上限。
