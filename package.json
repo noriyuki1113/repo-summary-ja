@@ -1,28 +1,33 @@
 {
   "name": "repo-summary-ja",
   "version": "0.1.0",
-  "description": "GitHubリポジトリの内容をClaude APIで解析し、日本語の要約を生成するCLIツール",
-  "type": "module",
-  "bin": {
-    "repo-summary-ja": "./dist/index.js"
-  },
-  "main": "./dist/index.js",
+  "private": true,
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "tsx src/index.ts"
-  },
-  "license": "MIT",
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.68.0",
-    "commander": "^12.1.0"
-  },
-  "devDependencies": {
-    "@types/node": "^22.10.2",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "migrate": "psql \"$POSTGRES_URL\" -f scripts/migrate.sql"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=18.18"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
+    "next": "^16.3.5",
+    "pg": "^8.23.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^22.20.2",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "autoprefixer": "^10.5.6",
+    "postcss": "^8.5.28",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2"
   }
 }
