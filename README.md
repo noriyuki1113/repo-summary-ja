@@ -55,3 +55,52 @@ scripts/migrate.sql  DBスキーマ定義
 | `GITHUB_TOKEN` | 任意 | GitHub Fine-grained PAT（public_repo read）。レート制限緩和用 |
 | `ANTHROPIC_API_KEY` | 必須 | Claude APIキー |
 | `CRON_SECRET` | 必須 | `/api/cron/*` を保護するための任意の文字列 |
+
+## デプロイ
+
+Vercel + Vercel Postgres(Neon統合)でのデプロイを想定。
+
+1. Vercelでリポジトリをimportし、Storageタブから Postgres(Neon) を作成してプロジェクトに接続
+2. `POSTGRES_URL` / `GITHUB_TOKEN` / `ANTHROPIC_API_KEY` / `CRON_SECRET` をEnvironment Variablesに設定
+   - 値を保存したら、プレースホルダーのまま(例: `postgres://user:pass@db.example.com/app` や `sk-ant-xxxxxxxx` のような例示文字列)になっていないか必ず確認する。これが原因で動作しないケースが多い
+3. Neon の SQL Editor(または `npm run migrate`)で `scripts/migrate.sql` を適用
+4. Redeployして動作確認
+
+`vercel.json` の設定により、日次バッチ(`/api/cron/refresh-stars`)はVercel Cronとして自動登録される。Vercel管理画面の「Run」ボタンによる手動実行は`CRON_SECRET`ヘッダーが付与されないため401になるのが正常(実際のスケジュール実行時のみ自動でヘッダーが付与される)。
+
+## 運用
+
+### 日常運用
+
+リポジトリの追加はすべてユーザーの検索行動が起点(オンデマンド収集)のため、手動でのデータ登録は不要。日次バッチもVercel Cronで自動実行されるため、基本的に放置でよい。
+
+### 定期的に確認する項目
+
+| 項目 | 場所 | 頻度目安 |
+| --- | --- | --- |
+| エラーの有無 | Vercel → Runtime Logs | 週1〜気になったとき |
+| Cron実行結果 | Vercel → Settings → Cron Jobs | 週1 |
+| DB容量 | Neon → Dashboard(Storage使用量) | 月1(無料枠0.5GB) |
+| Claude API利用料 | console.anthropic.com → Usage | 週1〜 |
+
+### コストについて
+
+- Claude要約はリポジトリ単位で初回1回のみ生成しDBに永続化されるため、コストは「新規に検索されるリポジトリの数」に比例する
+- `/api/lookup` はIPごとに1時間20回のレート制限があり、単一ユーザーによる大量検索は抑制される
+- スター数30未満のリポジトリは要約自体をスキップするため、無名リポジトリの乱発によるコスト増も抑制される
+
+### 未対応のメンテナンス項目
+
+- `search_logs` テーブルの自動削除バッチは未実装。増え続けるため、定期的に手動で削除するか、削除バッチの追加を検討する
+  ```sql
+  delete from search_logs where created_at < now() - interval '30 days';
+  ```
+- 規模拡大時は、Cronのバッチサイズ(`CANDIDATE_LIMIT`、現状500件/日)や、スター上位を毎日・それ以外を週1にするなどのティア分けを検討する
+
+### トラブルシューティング
+
+動作しない場合は以下の順に疑う。
+
+1. 環境変数がプレースホルダーのままになっていないか(Vercelの設定画面で値を直接確認)
+2. Vercel Runtime Logsで実際のエラーメッセージを確認
+3. Neon側でDBがスリープから復帰しているか(無料枠は非アクティブ時にサスペンドする場合がある)
